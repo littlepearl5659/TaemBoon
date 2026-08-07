@@ -150,7 +150,16 @@
       <input id="staffName" type="text" placeholder="เช่น จนท.มานี">
     </div>
 
+    <div class="staff-row">
+      <label>โหมดสแกน</label>
+      <select id="scanMode">
+        <option value="checkin">เช็คอินเข้างาน (วันงานจริง)</option>
+        <option value="lookup">บันทึกชำระเงิน / รับของที่ระลึก (ล่วงหน้าหรือวันงาน)</option>
+      </select>
+    </div>
+
     <div id="summary" class="summary">กำลังโหลดสรุปยอด...</div>
+    <div id="summaryPreEvent" class="summary" style="background: var(--warn-bg); color: var(--warn-text); font-size: 13px;"></div>
 
     <div class="chart-card">
       <p class="chart-total" id="chartTotal">ลงทะเบียนทั้งหมด — คน</p>
@@ -170,9 +179,10 @@
     // ตั้งค่านี้ให้เป็น URL ของ Apps Script Web App ที่ deploy ไว้
     // (หน้า Deploy > Manage deployments > คัดลอกลิงก์ที่ลงท้ายด้วย /exec)
     // ============================================================
-    var API_URL = 'https://script.google.com/macros/s/AKfycbyihMBeAJuuEAEaojDWhXii4dbPcsPUAGfuJKp8TpH4coFhpsAGuI71xVFRLTEHS6lM7g/exec';
+    var API_URL = 'https://script.google.com/macros/s/AKfycbzAOkkWEmnavyVDSWqEd9K-r9bVu0z-shJ0GmHq1BJ_4tWBPNapVkrf6dCGj6GUJo_S0w/exec';
 
     var STORAGE_KEY = 'scan_selected_event';
+    var STORAGE_KEY_MODE = 'scan_mode';
     var busy = false;
     var scanner = new Html5Qrcode('reader');
     var summaryChart = null;
@@ -261,6 +271,18 @@
       loadSummary();
     });
 
+    (function restoreScanMode() {
+      try {
+        var savedMode = localStorage.getItem(STORAGE_KEY_MODE);
+        if (savedMode) document.getElementById('scanMode').value = savedMode;
+      } catch (e) {}
+    })();
+
+    document.getElementById('scanMode').addEventListener('change', function () {
+      try { localStorage.setItem(STORAGE_KEY_MODE, document.getElementById('scanMode').value); } catch (e) {}
+      document.getElementById('scanResult').innerHTML = '';
+    });
+
     function loadSummary() {
       var eventId = currentEventId();
       if (!eventId) {
@@ -277,6 +299,15 @@
             'เข้าร่วมแล้ว <b>' + s['จำนวนคนเข้าร่วม'] + '</b> คน &nbsp;|&nbsp; '
             + 'ชำระวันนี้ <b>' + Number(s['ยอดเงินที่ชำระในวันงาน (บาท)'] || 0).toLocaleString() + '</b> บาท &nbsp;|&nbsp; '
             + 'แจกของแล้ว <b>' + s['จำนวนของที่ระลึกที่แจกในวันงาน'] + '</b> ชิ้น';
+
+          var preEventEl = document.getElementById('summaryPreEvent');
+          if (preEventEl) {
+            var prePay = Number(s['ยอดเงินที่ชำระล่วงหน้า (ก่อนวันงาน) (บาท)'] || 0);
+            var preGift = Number(s['จำนวนของที่ระลึกที่แจกล่วงหน้า (ก่อนวันงาน)'] || 0);
+            preEventEl.innerHTML =
+              'ชำระล่วงหน้าก่อนวันงาน <b>' + prePay.toLocaleString() + '</b> บาท &nbsp;|&nbsp; '
+              + 'แจกของล่วงหน้าก่อนวันงาน <b>' + preGift + '</b> ชิ้น';
+          }
 
           var total = Number(s['จำนวนผู้ลงทะเบียนทั้งหมด'] || 0);
           var checkedIn = Number(s['จำนวนคนเข้าร่วม'] || 0);
@@ -301,9 +332,26 @@
         alert('กรุณากรอกชื่อเจ้าหน้าที่ก่อนสแกน');
         return;
       }
+      var mode = document.getElementById('scanMode').value;
+      var regId = decodedText.trim();
       busy = true;
       document.getElementById('scanResult').innerHTML = '<p class="loading">กำลังตรวจสอบ...</p>';
-      apiPost('scanQr', { regId: decodedText.trim(), staffName: staffName, eventId: eventId })
+
+      if (mode === 'lookup') {
+        apiGet('lookupReg', { regId: regId, eventId: eventId })
+          .then(function (res) {
+            busy = false;
+            renderLookupResult(res);
+          })
+          .catch(function (err) {
+            busy = false;
+            document.getElementById('scanResult').innerHTML =
+              '<div class="card error">เกิดข้อผิดพลาด: ' + err.message + '</div>';
+          });
+        return;
+      }
+
+      apiPost('scanQr', { regId: regId, staffName: staffName, eventId: eventId })
         .then(function (res) {
           busy = false;
           renderResult(res);
@@ -313,6 +361,58 @@
           busy = false;
           document.getElementById('scanResult').innerHTML =
             '<div class="card error">เกิดข้อผิดพลาด: ' + err.message + '</div>';
+        });
+    }
+
+    function renderLookupResult(res) {
+      var el = document.getElementById('scanResult');
+      if (res.status === 'not_found') {
+        el.innerHTML = '<div class="card error">' + res.message + '</div>';
+        return;
+      }
+      if (res.status === 'wrong_event') {
+        el.innerHTML = '<div class="card warn"><h3>' + escapeHtml(res.member.name || res.member['ชื่อ-สกุล']) + '</h3>'
+          + '<p>' + res.message + '</p></div>';
+        return;
+      }
+      var name = res.member.name || res.member['ชื่อ-สกุล'];
+      var html = '<div class="card"><h3>' + escapeHtml(name) + '</h3>'
+        + '<p>ประเภท: ' + escapeHtml(res.type) + '</p>';
+
+      if (res.paymentAmount) {
+        if (res.paymentStatus === 'ชำระแล้ว') {
+          html += '<div class="health-alert"><p>✓ ชำระเงินแล้วก่อนหน้านี้ ไม่ต้องบันทึกซ้ำ</p></div>';
+        } else {
+          html += '<p>การชำระเงิน: ยังไม่ชำระ (' + Number(res.paymentAmount).toLocaleString() + ' บาท)</p>';
+          html += '<button onclick="markPayment(\'' + res.regId + '\')">บันทึกว่าชำระเงินแล้ว</button>';
+        }
+      }
+
+      if (res.souvenirDue === 'รับหน้างาน') {
+        if (res.souvenirStatus === 'แจกแล้ว') {
+          html += '<div class="health-alert"><p>⚠️ ได้รับของที่ระลึกไปแล้วก่อนหน้านี้ ไม่ต้องแจกซ้ำ</p></div>';
+        } else {
+          html += '<p>ของที่ระลึก: ยังไม่แจก</p>';
+          html += '<button onclick="giveSouvenir(\'' + res.regId + '\')">แจกของที่ระลึก (' + res.souvenirQty + ' ชิ้น)</button>';
+        }
+      } else if (res.souvenirDue === 'จัดส่ง') {
+        html += '<p>ของที่ระลึก: เลือกจัดส่ง (ไม่ต้องแจกหน้างาน)</p>';
+      }
+
+      html += '<p class="note ok">สถานะเช็คอิน: ' + escapeHtml(res.checkinStatus || 'ยังไม่เข้างาน') + '</p>';
+      html += '</div>';
+      el.innerHTML = html;
+    }
+
+    function markPayment(regId) {
+      var staffName = document.getElementById('staffName').value.trim();
+      apiPost('markPaymentReceived', { regId: regId, staffName: staffName })
+        .then(function () {
+          document.getElementById('scanResult').innerHTML += '<p class="note ok">บันทึกการชำระเงินแล้ว</p>';
+          loadSummary();
+        })
+        .catch(function (err) {
+          alert('บันทึกไม่สำเร็จ: ' + err.message);
         });
     }
 
@@ -331,10 +431,15 @@
         var html = '<div class="card ok"><h3>' + escapeHtml(name) + '</h3>'
           + '<p>ประเภท: ' + escapeHtml(res.type) + '</p>'
           + '<p>เข้างานสำเร็จ ✓</p>';
+
+        if (res.paymentStatus === 'ชำระแล้ว') {
+          html += '<div class="health-alert"><p>✓ ชำระเงินแล้วก่อนหน้านี้ ไม่ต้องเก็บเงินซ้ำ</p></div>';
+        }
+
         if (res.souvenirDue === 'รับหน้างาน' && res.souvenirStatus !== 'แจกแล้ว') {
           html += '<button onclick="giveSouvenir(\'' + res.regId + '\')">แจกของที่ระลึก (' + res.souvenirQty + ' ชิ้น)</button>';
         } else if (res.souvenirStatus === 'แจกแล้ว') {
-          html += '<p>ของที่ระลึก: แจกแล้ว</p>';
+          html += '<div class="health-alert"><p>⚠️ ได้รับของที่ระลึกไปแล้วก่อนหน้านี้ ไม่ต้องแจกซ้ำ</p></div>';
         } else if (res.souvenirDue === 'จัดส่ง') {
           html += '<p>ของที่ระลึก: เลือกจัดส่ง (ไม่ต้องแจกหน้างาน)</p>';
         }
