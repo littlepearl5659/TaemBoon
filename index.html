@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>สแกนเข้างาน - เจ้าหน้าที่</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Taviraj:wght@400;500;600&family=Sarabun:wght@300;400;500&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #F7F1E1;
+      --card-bg: #FFFDF6;
+      --border: #E6D9AF;
+      --border-soft: #EFE4C4;
+      --gold: #A9812E;
+      --gold-deep: #7C5E1E;
+      --text-primary: #4A4130;
+      --text-secondary: #8A7E62;
+      --ok-border: #A9812E;
+      --ok-text: #6C5817;
+      --warn-bg: #FBF3DE;
+      --warn-border: #D9A441;
+      --warn-text: #7C5A16;
+      --error-border: #A1503A;
+      --error-text: #8F4531;
+      --health-bg: #FBF3DE;
+      --health-border: #E0C67C;
+      --health-text: #78591A;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Sarabun', 'Segoe UI', Arial, sans-serif;
+      font-weight: 300;
+      background: var(--bg);
+      margin: 0;
+      padding: 20px 12px 60px;
+      color: var(--text-primary);
+    }
+    .container { max-width: 420px; margin: 0 auto; }
+    h1 {
+      font-family: 'Taviraj', 'Sarabun', serif;
+      font-size: 21px;
+      font-weight: 500;
+      text-align: center;
+      color: var(--gold-deep);
+      letter-spacing: 0.3px;
+      margin-bottom: 16px;
+    }
+    .staff-row { margin-bottom: 12px; }
+    .staff-row label { font-size: 13px; color: var(--text-secondary); display: block; margin-bottom: 4px; }
+    .staff-row input, .staff-row select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 15px;
+      background: var(--card-bg);
+      color: var(--text-primary);
+    }
+    .staff-row input:focus, .staff-row select:focus { outline: none; border-color: var(--gold); }
+    .summary {
+      background: var(--gold-deep);
+      color: #FFFDF6;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 13.5px;
+      line-height: 1.9;
+      margin-bottom: 14px;
+      text-align: center;
+    }
+    #reader { width: 100%; max-width: 320px; margin: 0 auto 14px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+    #scanResult { min-height: 40px; }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-soft);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+    }
+    .card h3 { font-family: 'Taviraj', 'Sarabun', serif; margin: 0 0 6px; font-size: 17px; font-weight: 500; color: var(--gold-deep); }
+    .card p { margin: 4px 0; font-size: 14px; color: var(--text-primary); }
+    .card.ok { border-left: 4px solid var(--ok-border); border-radius: 0 12px 12px 0; }
+    .card.ok p:last-of-type { color: var(--ok-text); }
+    .card.warn { border-left: 4px solid var(--warn-border); border-radius: 0 12px 12px 0; background: var(--warn-bg); }
+    .card.error { border-left: 4px solid var(--error-border); border-radius: 0 12px 12px 0; color: var(--error-text); }
+    .health-alert {
+      background: var(--health-bg);
+      border: 1px solid var(--health-border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-top: 8px;
+      font-size: 13.5px;
+    }
+    .health-alert p { margin: 2px 0; color: var(--health-text); }
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-soft);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      text-align: center;
+    }
+    .chart-card canvas { max-width: 160px; max-height: 160px; margin: 0 auto; }
+    .chart-total { font-family: 'Taviraj', 'Sarabun', serif; font-size: 15px; color: var(--gold-deep); margin: 0 0 10px; }
+    .chart-legend { display: flex; justify-content: center; gap: 18px; margin-top: 10px; font-size: 13px; }
+    .chart-legend span { display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary); }
+    .chart-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    button {
+      margin-top: 8px;
+      padding: 10px 14px;
+      background: var(--gold);
+      color: #FFFDF6;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button:active { background: var(--gold-deep); }
+    .note.ok { color: var(--ok-text); font-size: 13.5px; }
+    .loading { text-align: center; color: var(--text-secondary); font-size: 13.5px; }
+    .config-warning {
+      background: var(--error-border);
+      color: #FFFDF6;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+      margin-bottom: 14px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>สแกนเข้างาน — เจ้าหน้าที่</h1>
+
+    <div id="configWarning"></div>
+
+    <div class="staff-row">
+      <label>งานที่กำลังสแกน</label>
+      <select id="eventSelect">
+        <option value="">กำลังโหลดรายการงาน...</option>
+      </select>
+    </div>
+
+    <div class="staff-row">
+      <label>ชื่อเจ้าหน้าที่ผู้สแกน</label>
+      <input id="staffName" type="text" placeholder="เช่น จนท.มานี">
+    </div>
+
+    <div id="summary" class="summary">กำลังโหลดสรุปยอด...</div>
+
+    <div class="chart-card">
+      <p class="chart-total" id="chartTotal">ลงทะเบียนทั้งหมด — คน</p>
+      <canvas id="summaryChart" width="160" height="160" role="img" aria-label="กราฟวงกลมแสดงสัดส่วนคนเข้างานแล้วกับยังไม่เข้างาน">กราฟวงกลมสัดส่วนคนเข้างานแล้ว/ยังไม่เข้างาน</canvas>
+      <div class="chart-legend">
+        <span><i style="background:#A9812E"></i>เข้างานแล้ว</span>
+        <span><i style="background:#E6D9AF"></i>ยังไม่เข้างาน</span>
+      </div>
+    </div>
+
+    <div id="reader"></div>
+    <div id="scanResult"></div>
+  </div>
+
+  <script>
+    // ============================================================
+    // ตั้งค่านี้ให้เป็น URL ของ Apps Script Web App ที่ deploy ไว้
+    // (หน้า Deploy > Manage deployments > คัดลอกลิงก์ที่ลงท้ายด้วย /exec)
+    // ============================================================
+    var API_URL = 'https://script.google.com/macros/s/AKfycbyihMBeAJuuEAEaojDWhXii4dbPcsPUAGfuJKp8TpH4coFhpsAGuI71xVFRLTEHS6lM7g/exec';
+
+    var STORAGE_KEY = 'scan_selected_event';
+    var busy = false;
+    var scanner = new Html5Qrcode('reader');
+    var summaryChart = null;
+
+    if (!API_URL || API_URL.indexOf('PASTE_YOUR') === 0) {
+      document.getElementById('configWarning').innerHTML =
+        '<div class="config-warning">ยังไม่ได้ตั้งค่า API_URL ในไฟล์นี้ กรุณาแก้ตัวแปร API_URL ให้เป็นลิงก์ /exec ของ Apps Script</div>';
+    }
+
+    function apiGet(action, params) {
+      var url = API_URL + '?action=' + encodeURIComponent(action);
+      Object.keys(params || {}).forEach(function (k) {
+        url += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+      });
+      return fetch(url).then(function (r) { return r.json(); });
+    }
+
+    function apiPost(action, params) {
+      var body = Object.assign({ action: action }, params || {});
+      return fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(body)
+      }).then(function (r) { return r.json(); });
+    }
+
+    function updateChart(checkedIn, notYet) {
+      var ctx = document.getElementById('summaryChart').getContext('2d');
+      var data = {
+        labels: ['เข้างานแล้ว', 'ยังไม่เข้างาน'],
+        datasets: [{
+          data: [checkedIn, notYet],
+          backgroundColor: ['#A9812E', '#E6D9AF'],
+          borderColor: '#FFFDF6',
+          borderWidth: 2
+        }]
+      };
+      if (summaryChart) {
+        summaryChart.data = data;
+        summaryChart.update();
+        return;
+      }
+      summaryChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: data,
+        options: {
+          responsive: false,
+          cutout: '62%',
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+
+    function currentEventId() {
+      return document.getElementById('eventSelect').value;
+    }
+
+    function loadEventList() {
+      apiGet('getEventList', {})
+        .then(function (events) {
+          var select = document.getElementById('eventSelect');
+          if (!events || events.length === 0) {
+            select.innerHTML = '<option value="">ไม่พบงานในระบบ</option>';
+            return;
+          }
+          var saved = '';
+          try { saved = localStorage.getItem(STORAGE_KEY) || ''; } catch (e) {}
+          select.innerHTML = events.map(function (ev) {
+            var label = ev['ชื่องาน'] + (ev['วันที่จัดงาน'] ? ' (' + ev['วันที่จัดงาน'] + ')' : '');
+            return '<option value="' + ev.EventID + '">' + escapeHtml(label) + '</option>';
+          }).join('');
+          if (saved && events.some(function (ev) { return ev.EventID === saved; })) {
+            select.value = saved;
+          }
+          loadSummary();
+        })
+        .catch(function (err) {
+          document.getElementById('eventSelect').innerHTML = '<option value="">โหลดรายการงานไม่สำเร็จ</option>';
+          document.getElementById('summary').innerHTML = 'โหลดรายการงานไม่สำเร็จ: ' + err.message;
+        });
+    }
+
+    document.getElementById('eventSelect').addEventListener('change', function () {
+      try { localStorage.setItem(STORAGE_KEY, currentEventId()); } catch (e) {}
+      document.getElementById('scanResult').innerHTML = '';
+      loadSummary();
+    });
+
+    function loadSummary() {
+      var eventId = currentEventId();
+      if (!eventId) {
+        document.getElementById('summary').innerHTML = 'กรุณาเลือกงานที่จะสแกนก่อน';
+        return;
+      }
+      apiGet('getEventSummary', { eventId: eventId })
+        .then(function (s) {
+          if (!s) {
+            document.getElementById('summary').innerHTML = 'ไม่พบข้อมูลสรุปของงานนี้';
+            return;
+          }
+          document.getElementById('summary').innerHTML =
+            'เข้าร่วมแล้ว <b>' + s['จำนวนคนเข้าร่วม'] + '</b> คน &nbsp;|&nbsp; '
+            + 'ชำระวันนี้ <b>' + Number(s['ยอดเงินที่ชำระในวันงาน (บาท)'] || 0).toLocaleString() + '</b> บาท &nbsp;|&nbsp; '
+            + 'แจกของแล้ว <b>' + s['จำนวนของที่ระลึกที่แจกในวันงาน'] + '</b> ชิ้น';
+
+          var total = Number(s['จำนวนผู้ลงทะเบียนทั้งหมด'] || 0);
+          var checkedIn = Number(s['จำนวนคนเข้าร่วม'] || 0);
+          var notYet = Math.max(total - checkedIn, 0);
+          document.getElementById('chartTotal').textContent = 'ลงทะเบียนทั้งหมด ' + total + ' คน';
+          updateChart(checkedIn, notYet);
+        })
+        .catch(function (err) {
+          document.getElementById('summary').innerHTML = 'โหลดสรุปยอดไม่สำเร็จ: ' + err.message;
+        });
+    }
+
+    function onScanSuccess(decodedText) {
+      if (busy) return;
+      var eventId = currentEventId();
+      if (!eventId) {
+        alert('กรุณาเลือกงานที่จะสแกนก่อน');
+        return;
+      }
+      var staffName = document.getElementById('staffName').value.trim();
+      if (!staffName) {
+        alert('กรุณากรอกชื่อเจ้าหน้าที่ก่อนสแกน');
+        return;
+      }
+      busy = true;
+      document.getElementById('scanResult').innerHTML = '<p class="loading">กำลังตรวจสอบ...</p>';
+      apiPost('scanQr', { regId: decodedText.trim(), staffName: staffName, eventId: eventId })
+        .then(function (res) {
+          busy = false;
+          renderResult(res);
+          loadSummary();
+        })
+        .catch(function (err) {
+          busy = false;
+          document.getElementById('scanResult').innerHTML =
+            '<div class="card error">เกิดข้อผิดพลาด: ' + err.message + '</div>';
+        });
+    }
+
+    function renderResult(res) {
+      var el = document.getElementById('scanResult');
+      if (res.status === 'not_found') {
+        el.innerHTML = '<div class="card error">' + res.message + '</div>';
+      } else if (res.status === 'wrong_event') {
+        el.innerHTML = '<div class="card warn"><h3>' + escapeHtml(res.member.name || res.member['ชื่อ-สกุล']) + '</h3>'
+          + '<p>' + res.message + '</p></div>';
+      } else if (res.status === 'duplicate') {
+        el.innerHTML = '<div class="card warn"><h3>' + escapeHtml(res.member.name || res.member['ชื่อ-สกุล']) + '</h3>'
+          + '<p>' + res.message + '</p></div>';
+      } else if (res.status === 'success') {
+        var name = res.member.name || res.member['ชื่อ-สกุล'];
+        var html = '<div class="card ok"><h3>' + escapeHtml(name) + '</h3>'
+          + '<p>ประเภท: ' + escapeHtml(res.type) + '</p>'
+          + '<p>เข้างานสำเร็จ ✓</p>';
+        if (res.souvenirDue === 'รับหน้างาน' && res.souvenirStatus !== 'แจกแล้ว') {
+          html += '<button onclick="giveSouvenir(\'' + res.regId + '\')">แจกของที่ระลึก (' + res.souvenirQty + ' ชิ้น)</button>';
+        } else if (res.souvenirStatus === 'แจกแล้ว') {
+          html += '<p>ของที่ระลึก: แจกแล้ว</p>';
+        } else if (res.souvenirDue === 'จัดส่ง') {
+          html += '<p>ของที่ระลึก: เลือกจัดส่ง (ไม่ต้องแจกหน้างาน)</p>';
+        }
+        if (res.foodAllergy || res.medicalNote) {
+          html += '<div class="health-alert">';
+          if (res.foodAllergy) html += '<p>⚠️ แพ้อาหาร: ' + escapeHtml(res.foodAllergy) + '</p>';
+          if (res.medicalNote) html += '<p>⚠️ โรคประจำตัว/ยาที่ต้องทาน: ' + escapeHtml(res.medicalNote) + '</p>';
+          html += '</div>';
+        }
+        html += '</div>';
+        el.innerHTML = html;
+      }
+    }
+
+    function giveSouvenir(regId) {
+      var staffName = document.getElementById('staffName').value.trim();
+      apiPost('markSouvenirGiven', { regId: regId, staffName: staffName })
+        .then(function () {
+          document.getElementById('scanResult').innerHTML += '<p class="note ok">บันทึกการแจกของที่ระลึกแล้ว</p>';
+          loadSummary();
+        })
+        .catch(function (err) {
+          alert('บันทึกไม่สำเร็จ: ' + err.message);
+        });
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: 250 },
+      onScanSuccess
+    ).catch(function (err) {
+      document.getElementById('reader').innerHTML =
+        '<p class="loading">เปิดกล้องไม่สำเร็จ กรุณาอนุญาตการใช้กล้องในเบราว์เซอร์ (' + err + ')</p>';
+    });
+
+    loadEventList();
+    setInterval(loadSummary, 15000);
+  </script>
+</body>
+</html>
