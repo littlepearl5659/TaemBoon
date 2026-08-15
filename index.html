@@ -158,6 +158,14 @@
       </select>
     </div>
 
+    <div class="staff-row" id="phoneSearchRow">
+      <label id="phoneSearchLabel">หรือค้นหาด้วยเบอร์โทร (เผื่อสแกน QR ไม่ได้/หาไม่เจอ)</label>
+      <div style="display:flex; gap:8px;">
+        <input id="phoneSearchInput" type="tel" placeholder="เช่น 0812345678" style="flex:1;">
+        <button type="button" onclick="searchByPhone()" style="margin-top:0; white-space:nowrap;">ค้นหา</button>
+      </div>
+    </div>
+
     <div id="summary" class="summary">กำลังโหลดสรุปยอด...</div>
     <div id="summaryPreEvent" class="summary" style="background: var(--warn-bg); color: var(--warn-text); font-size: 13px;"></div>
 
@@ -212,8 +220,7 @@
     // ตั้งค่านี้ให้เป็น URL ของ Apps Script Web App ที่ deploy ไว้
     // (หน้า Deploy > Manage deployments > คัดลอกลิงก์ที่ลงท้ายด้วย /exec)
     // ============================================================
-    var API_URL = 'https://script.google.com/macros/s/AKfycbxNQB1sxShDDW3-NEAxsUgyYxwi9XvbVvWHyxBqYatwntEROSpeRGV_1Aqibem2rzLD/exec
-';
+    var API_URL = 'https://script.google.com/macros/s/AKfycbxNQB1sxShDDW3-NEAxsUgyYxwi9XvbVvWHyxBqYatwntEROSpeRGV_1Aqibem2rzLD/exec';
 
     var STORAGE_KEY = 'scan_selected_event';
     var STORAGE_KEY_MODE = 'scan_mode';
@@ -305,17 +312,58 @@
       loadSummary();
     });
 
+    function updatePhoneSearchVisibility() {
+      var mode = document.getElementById('scanMode').value;
+      document.getElementById('phoneSearchLabel').textContent = (mode === 'checkin')
+        ? 'หรือเช็คอินด้วยเบอร์โทร (เผื่อ QR หาย/หาไม่เจอ)'
+        : 'หรือค้นหาด้วยเบอร์โทร (ไม่ต้องสแกน QR)';
+    }
+
     (function restoreScanMode() {
       try {
         var savedMode = localStorage.getItem(STORAGE_KEY_MODE);
         if (savedMode) document.getElementById('scanMode').value = savedMode;
       } catch (e) {}
+      updatePhoneSearchVisibility();
     })();
 
     document.getElementById('scanMode').addEventListener('change', function () {
       try { localStorage.setItem(STORAGE_KEY_MODE, document.getElementById('scanMode').value); } catch (e) {}
       document.getElementById('scanResult').innerHTML = '';
+      updatePhoneSearchVisibility();
     });
+
+    function searchByPhone() {
+      var eventId = currentEventId();
+      if (!eventId) { alert('กรุณาเลือกงานก่อน'); return; }
+      var phone = document.getElementById('phoneSearchInput').value.trim();
+      if (!phone) { alert('กรุณากรอกเบอร์โทร'); return; }
+      var mode = document.getElementById('scanMode').value;
+      var staffName = document.getElementById('staffName').value.trim();
+      document.getElementById('scanResult').innerHTML = '<p class="loading">กำลังค้นหา...</p>';
+
+      if (mode === 'checkin') {
+        apiPost('checkinByPhone', { phone: phone, staffName: staffName, eventId: eventId })
+          .then(function (res) {
+            renderResult(res);
+            loadSummary();
+          })
+          .catch(function (err) {
+            document.getElementById('scanResult').innerHTML =
+              '<div class="card error">เกิดข้อผิดพลาด: ' + escapeHtml(err.message) + '</div>';
+          });
+        return;
+      }
+
+      apiGet('lookupRegByPhone', { phone: phone, eventId: eventId })
+        .then(function (res) {
+          renderLookupResult(res);
+        })
+        .catch(function (err) {
+          document.getElementById('scanResult').innerHTML =
+            '<div class="card error">เกิดข้อผิดพลาด: ' + escapeHtml(err.message) + '</div>';
+        });
+    }
 
     function loadSummary() {
       var eventId = currentEventId();
@@ -464,6 +512,9 @@
 
         if (res.paymentStatus === 'ชำระแล้ว') {
           html += '<div class="health-alert"><p>✓ ชำระเงินแล้วก่อนหน้านี้ ไม่ต้องเก็บเงินซ้ำ</p></div>';
+        } else if (res.paymentAmount) {
+          html += '<p>การชำระเงิน: ยังไม่ชำระ (' + Number(res.paymentAmount).toLocaleString() + ' บาท)</p>';
+          html += '<button onclick="markPayment(\'' + res.regId + '\')">บันทึกว่าชำระเงินแล้ว</button>';
         }
 
         if (res.souvenirDue === 'รับหน้างาน' && res.souvenirStatus !== 'แจกแล้ว') {
