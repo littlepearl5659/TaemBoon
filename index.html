@@ -161,6 +161,39 @@
     <div id="summary" class="summary">กำลังโหลดสรุปยอด...</div>
     <div id="summaryPreEvent" class="summary" style="background: var(--warn-bg); color: var(--warn-text); font-size: 13px;"></div>
 
+    <div class="staff-row">
+      <button type="button" id="toggleManualAdd" style="width:100%; background: var(--card-bg); color: var(--gold-deep); border: 1px solid var(--border);">+ เพิ่มสมาชิกใหม่ด้วยมือ (ไม่ผ่าน LINE/Facebook)</button>
+    </div>
+
+    <div id="manualAddForm" class="card" style="display:none;">
+      <h3>เพิ่มสมาชิกใหม่ด้วยมือ</h3>
+      <div class="staff-row"><label>ชื่อ-สกุล</label><input id="maName" type="text"></div>
+      <div class="staff-row"><label>เบอร์โทร</label><input id="maPhone" type="tel"></div>
+      <div class="staff-row"><label>ประเภทการลงทะเบียน</label><input id="maType" type="text" placeholder="เช่น เจ้าภาพผ้ากฐิน"></div>
+      <div class="staff-row"><label>จำนวนกอง (ถ้ามี)</label><input id="maUnits" type="number" min="0"></div>
+      <div class="staff-row"><label>ยอดเงินรวม (บาท)</label><input id="maAmount" type="number" min="0"></div>
+      <div class="staff-row">
+        <label>สถานะการชำระ</label>
+        <select id="maPaymentStatus">
+          <option value="ยังไม่ชำระ">ยังไม่ชำระ</option>
+          <option value="ชำระแล้ว">ชำระแล้ว</option>
+        </select>
+      </div>
+      <div class="staff-row">
+        <label>การรับของที่ระลึก</label>
+        <select id="maSouvenirMethod">
+          <option value="รับหน้างาน">รับหน้างาน</option>
+          <option value="จัดส่ง">จัดส่ง</option>
+          <option value="">ไม่รับของที่ระลึก</option>
+        </select>
+      </div>
+      <div class="staff-row"><label>จำนวนของที่ระลึกที่ต้องได้รับ</label><input id="maSouvenirQty" type="number" min="0"></div>
+      <div class="staff-row"><label>ที่อยู่จัดส่ง (กรณีเลือกจัดส่ง)</label><input id="maAddress" type="text"></div>
+      <div class="staff-row"><label>หมายเหตุเพิ่มเติม</label><input id="maNote" type="text"></div>
+      <button type="button" onclick="submitManualAdd()">บันทึกสมาชิกใหม่</button>
+      <div id="manualAddResult"></div>
+    </div>
+
     <div class="chart-card">
       <p class="chart-total" id="chartTotal">ลงทะเบียนทั้งหมด — คน</p>
       <canvas id="summaryChart" width="160" height="160" role="img" aria-label="กราฟวงกลมแสดงสัดส่วนคนเข้างานแล้วกับยังไม่เข้างาน">กราฟวงกลมสัดส่วนคนเข้างานแล้ว/ยังไม่เข้างาน</canvas>
@@ -179,7 +212,7 @@
     // ตั้งค่านี้ให้เป็น URL ของ Apps Script Web App ที่ deploy ไว้
     // (หน้า Deploy > Manage deployments > คัดลอกลิงก์ที่ลงท้ายด้วย /exec)
     // ============================================================
-    var API_URL = 'https://script.google.com/macros/s/AKfycbzAOkkWEmnavyVDSWqEd9K-r9bVu0z-shJ0GmHq1BJ_4tWBPNapVkrf6dCGj6GUJo_S0w/exec';
+    var API_URL = 'PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE';
 
     var STORAGE_KEY = 'scan_selected_event';
     var STORAGE_KEY_MODE = 'scan_mode';
@@ -463,6 +496,61 @@
         })
         .catch(function (err) {
           alert('บันทึกไม่สำเร็จ: ' + err.message);
+        });
+    }
+
+    document.getElementById('toggleManualAdd').addEventListener('click', function () {
+      var form = document.getElementById('manualAddForm');
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    });
+
+    function submitManualAdd() {
+      var eventId = currentEventId();
+      if (!eventId) { alert('กรุณาเลือกงานก่อน'); return; }
+      var staffName = document.getElementById('staffName').value.trim();
+      if (!staffName) { alert('กรุณากรอกชื่อเจ้าหน้าที่ก่อน'); return; }
+      var name = document.getElementById('maName').value.trim();
+      var phone = document.getElementById('maPhone').value.trim();
+      if (!name || !phone) { alert('กรุณากรอกชื่อและเบอร์โทร'); return; }
+
+      var payload = {
+        eventId: eventId,
+        staffName: staffName,
+        name: name,
+        phone: phone,
+        regType: document.getElementById('maType').value.trim(),
+        units: document.getElementById('maUnits').value,
+        amount: document.getElementById('maAmount').value,
+        paymentStatus: document.getElementById('maPaymentStatus').value,
+        souvenirMethod: document.getElementById('maSouvenirMethod').value,
+        souvenirQty: document.getElementById('maSouvenirQty').value,
+        address: document.getElementById('maAddress').value.trim(),
+        note: document.getElementById('maNote').value.trim()
+      };
+
+      var resultEl = document.getElementById('manualAddResult');
+      resultEl.innerHTML = '<p class="loading">กำลังบันทึก...</p>';
+
+      apiPost('addManualMember', payload)
+        .then(function (res) {
+          if (res.status !== 'success') {
+            resultEl.innerHTML = '<div class="card error">' + escapeHtml(res.message || 'บันทึกไม่สำเร็จ') + '</div>';
+            return;
+          }
+          resultEl.innerHTML =
+            '<div class="card ok"><h3>' + escapeHtml(name) + '</h3>'
+            + '<p>บันทึกสำเร็จ ✓ รหัสลงทะเบียน: ' + escapeHtml(res.regId) + '</p>'
+            + (res.reusedExistingMember ? '<p class="note ok">พบเบอร์นี้เป็นสมาชิกเดิม ใช้ MemberID เดิม</p>' : '')
+            + '<p>QR Code สำหรับเช็คอินหน้างาน:</p>'
+            + '<img src="' + res.qrCodeUrl + '" alt="QR Code" style="max-width:200px; display:block; margin:8px auto;">'
+            + '</div>';
+          ['maName', 'maPhone', 'maType', 'maUnits', 'maAmount', 'maSouvenirQty', 'maAddress', 'maNote'].forEach(function (id) {
+            document.getElementById(id).value = '';
+          });
+          loadSummary();
+        })
+        .catch(function (err) {
+          resultEl.innerHTML = '<div class="card error">เกิดข้อผิดพลาด: ' + escapeHtml(err.message) + '</div>';
         });
     }
 
