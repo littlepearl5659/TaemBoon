@@ -184,7 +184,8 @@
         <label>สถานะการชำระ</label>
         <select id="maPaymentStatus">
           <option value="ยังไม่ชำระ">ยังไม่ชำระ</option>
-          <option value="ชำระแล้ว">ชำระแล้ว</option>
+          <option value="เงินสด">เงินสด</option>
+          <option value="เงินโอน">เงินโอน</option>
         </select>
       </div>
       <div class="staff-row">
@@ -458,11 +459,11 @@
         + '<p>ประเภท: ' + escapeHtml(res.type) + '</p>';
 
       if (res.paymentAmount) {
-        if (res.paymentStatus === 'ชำระแล้ว') {
-          html += '<div class="health-alert"><p>✓ ชำระเงินแล้วก่อนหน้านี้ ไม่ต้องบันทึกซ้ำ</p></div>';
+        if (isPaidStatus(res.paymentStatus)) {
+          html += '<div class="health-alert"><p>✓ ชำระเงินแล้ว (' + escapeHtml(res.paymentStatus) + ') ก่อนหน้านี้ ไม่ต้องบันทึกซ้ำ</p></div>';
         } else {
           html += '<p>การชำระเงิน: ยังไม่ชำระ (' + Number(res.paymentAmount).toLocaleString() + ' บาท)</p>';
-          html += '<button onclick="markPayment(\'' + res.regId + '\')">บันทึกว่าชำระเงินแล้ว</button>';
+          html += paymentMethodPickerHtml(res.regId);
         }
       }
 
@@ -482,11 +483,24 @@
       el.innerHTML = html;
     }
 
+    function paymentMethodPickerHtml(regId) {
+      return '<div class="staff-row" style="margin-top:8px; margin-bottom:4px;">'
+        + '<label>ช่องทางชำระ</label>'
+        + '<select id="paymentMethodSelect">'
+        + '<option value="เงินโอน">เงินโอน</option>'
+        + '<option value="เงินสด">เงินสด</option>'
+        + '</select>'
+        + '</div>'
+        + '<button onclick="markPayment(\'' + regId + '\')">บันทึกว่าชำระเงินแล้ว</button>';
+    }
+
     function markPayment(regId) {
       var staffName = document.getElementById('staffName').value.trim();
-      apiPost('markPaymentReceived', { regId: regId, staffName: staffName })
+      var methodEl = document.getElementById('paymentMethodSelect');
+      var paymentMethod = methodEl ? methodEl.value : '';
+      apiPost('markPaymentReceived', { regId: regId, staffName: staffName, paymentMethod: paymentMethod })
         .then(function () {
-          document.getElementById('scanResult').innerHTML += '<p class="note ok">บันทึกการชำระเงินแล้ว</p>';
+          document.getElementById('scanResult').innerHTML += '<p class="note ok">บันทึกการชำระเงินแล้ว (' + escapeHtml(paymentMethod) + ')</p>';
           loadSummary();
         })
         .catch(function (err) {
@@ -510,11 +524,11 @@
           + '<p>ประเภท: ' + escapeHtml(res.type) + '</p>'
           + '<p>เข้างานสำเร็จ ✓</p>';
 
-        if (res.paymentStatus === 'ชำระแล้ว') {
-          html += '<div class="health-alert"><p>✓ ชำระเงินแล้วก่อนหน้านี้ ไม่ต้องเก็บเงินซ้ำ</p></div>';
+        if (isPaidStatus(res.paymentStatus)) {
+          html += '<div class="health-alert"><p>✓ ชำระเงินแล้ว (' + escapeHtml(res.paymentStatus) + ') ก่อนหน้านี้ ไม่ต้องเก็บเงินซ้ำ</p></div>';
         } else if (res.paymentAmount) {
           html += '<p>การชำระเงิน: ยังไม่ชำระ (' + Number(res.paymentAmount).toLocaleString() + ' บาท)</p>';
-          html += '<button onclick="markPayment(\'' + res.regId + '\')">บันทึกว่าชำระเงินแล้ว</button>';
+          html += paymentMethodPickerHtml(res.regId);
         }
 
         if (res.souvenirDue === 'รับหน้างาน' && res.souvenirStatus !== 'แจกแล้ว') {
@@ -599,6 +613,10 @@
         .catch(function (err) {
           resultEl.innerHTML = '<div class="card error">เกิดข้อผิดพลาด: ' + escapeHtml(err.message) + '</div>';
         });
+    }
+
+    function isPaidStatus(status) {
+      return !!status && status !== 'ยังไม่ชำระ';
     }
 
     function escapeHtml(str) {
