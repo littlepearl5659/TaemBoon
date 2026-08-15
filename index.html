@@ -212,7 +212,8 @@
     // ตั้งค่านี้ให้เป็น URL ของ Apps Script Web App ที่ deploy ไว้
     // (หน้า Deploy > Manage deployments > คัดลอกลิงก์ที่ลงท้ายด้วย /exec)
     // ============================================================
-    var API_URL = 'https://script.google.com/macros/s/AKfycbxNQB1sxShDDW3-NEAxsUgyYxwi9XvbVvWHyxBqYatwntEROSpeRGV_1Aqibem2rzLD/exec';
+    var API_URL = 'https://script.google.com/macros/s/AKfycbxNQB1sxShDDW3-NEAxsUgyYxwi9XvbVvWHyxBqYatwntEROSpeRGV_1Aqibem2rzLD/exec
+';
 
     var STORAGE_KEY = 'scan_selected_event';
     var STORAGE_KEY_MODE = 'scan_mode';
@@ -361,10 +362,6 @@
         return;
       }
       var staffName = document.getElementById('staffName').value.trim();
-      if (!staffName) {
-        alert('กรุณากรอกชื่อเจ้าหน้าที่ก่อนสแกน');
-        return;
-      }
       var mode = document.getElementById('scanMode').value;
       var regId = decodedText.trim();
       busy = true;
@@ -508,7 +505,6 @@
       var eventId = currentEventId();
       if (!eventId) { alert('กรุณาเลือกงานก่อน'); return; }
       var staffName = document.getElementById('staffName').value.trim();
-      if (!staffName) { alert('กรุณากรอกชื่อเจ้าหน้าที่ก่อน'); return; }
       var name = document.getElementById('maName').value.trim();
       var phone = document.getElementById('maPhone').value.trim();
       if (!name || !phone) { alert('กรุณากรอกชื่อและเบอร์โทร'); return; }
